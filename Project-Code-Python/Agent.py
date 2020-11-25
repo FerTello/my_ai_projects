@@ -81,15 +81,13 @@ class Agent:
                     return i + 1
 
         def find_transformation(all_figs):
-            h0_diff, h1_diff, h2_diff = calc_horizontals_differences(all_figs)
             h0_adds, h1_adds, h2_adds, blacks_counts = has_additions(all_figs)
-            if h0_diff == h1_diff == h2_diff == True:
-                if h0_adds == h1_adds == h2_adds == True:
-                    return 'constant additions', blacks_counts
-                elif check_halves_additions(all_figs):
-                    return 'halves additions', blacks_counts
+            if h0_adds == h1_adds == h2_adds == True:
+                return 'constant additions', blacks_counts
+            elif check_halves_additions(all_figs):
+                return 'halves additions', blacks_counts
             else:
-                return 'no horizontal differences', blacks_counts
+                return 'detected horizonal differences', blacks_counts
 
         def calc_horizontals_differences(all_figs):
             h0_diff = h1_diff = h2_diff = False
@@ -108,20 +106,26 @@ class Agent:
                 h2_diff = True
             return h0_diff, h1_diff, h2_diff
 
-
         def check_halves_additions(all_figs):
-            check_horizontal_halves(all_figs[0], all_figs[1], all_figs[2])
-            check_horizontal_halves(all_figs[3], all_figs[4], all_figs[5])
-            return True
+            h0_are_halves = check_horizontal_halves(all_figs[0], all_figs[1], all_figs[2])
+            h1_are_halves = check_horizontal_halves(all_figs[3], all_figs[4], all_figs[5])
+            if h0_are_halves and h1_are_halves:
+                return True
+            else:
+                return False
 
-        def check_horizontal_halves(fig1, fig2, fig3):
-            two_halves_arr = fig1
+        def figures_merge(fig1, fig2):
+            merge = fig1
             for j, y_val in enumerate(fig1):
                 for i, x_val in enumerate(y_val):
                     if x_val > fig2[j][i]:
-                        two_halves_arr[j][i] = fig2[j][i]
-            compare = two_halves_arr == fig3
-            if compare.all():
+                        merge[j][i] = fig2[j][i]
+            return merge
+
+        def check_horizontal_halves(fig1, fig2, fig3):
+            two_halves_arr = figures_merge(fig1, fig2)
+            pixels_diff = calc_np_diff(two_halves_arr, fig3)
+            if np.count_nonzero(pixels_diff) < 20:
                 return True
 
         def has_additions(all_figs):
@@ -197,7 +201,7 @@ class Agent:
         def calc_img_difference(file1, file2):
             return np.abs(file1 - file2).sum()
 
-        def calc_np_diff(a,b):
+        def calc_np_diff(a, b):
             return abs(a - b)
 
         def calc_black_pixels(fig):
@@ -282,10 +286,12 @@ class Agent:
                         pixel_inc = calc_pix_increments(black_pixels)
                         answer = select_answer_with_addition(th_array[7], pixel_inc, solutions_array)
                     elif transformation == 'halves additions':
+                        merge = figures_merge(th_array[6], th_array[7])
+                        answer = select_answer_similar_to(merge, solutions_array)
                         print('halves additions', problem.name)
                     elif transformation == 'no horizontal differences':
                         answer = select_answer_similar_to(th_array[7], solutions_array)
-
+                        print(transformation)
 
         print(answer)
         return int(answer)
