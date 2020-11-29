@@ -82,10 +82,11 @@ class Agent:
 
         def find_transformation(all_figs):
             h0_adds, h1_adds, h2_adds, blacks_counts = has_additions(all_figs)
+            are_halves, merge_side = check_halves_additions(all_figs)
             if h0_adds == h1_adds == h2_adds == True:
                 return 'constant additions', blacks_counts
-            elif check_halves_additions(all_figs):
-                return 'halves additions', blacks_counts
+            elif are_halves:
+                return merge_side, blacks_counts
             else:
                 return 'detected horizonal differences', blacks_counts
 
@@ -107,26 +108,51 @@ class Agent:
             return h0_diff, h1_diff, h2_diff
 
         def check_halves_additions(all_figs):
-            h0_are_halves = check_horizontal_halves(all_figs[0], all_figs[1], all_figs[2])
-            h1_are_halves = check_horizontal_halves(all_figs[3], all_figs[4], all_figs[5])
+            h0_are_halves, merge_side = check_horizontal_halves(all_figs[0], all_figs[1], all_figs[2])
+            h1_are_halves, merge_side = check_horizontal_halves(all_figs[3], all_figs[4], all_figs[5])
             if h0_are_halves and h1_are_halves:
-                return True
+                return True, merge_side
             else:
-                return False
-
-        def figures_merge(fig1, fig2):
-            merge = fig1
-            for j, y_val in enumerate(fig1):
-                for i, x_val in enumerate(y_val):
-                    if x_val > fig2[j][i]:
-                        merge[j][i] = fig2[j][i]
-            return merge
+                return False, merge_side
 
         def check_horizontal_halves(fig1, fig2, fig3):
-            two_halves_arr = figures_merge(fig1, fig2)
-            pixels_diff = calc_np_diff(two_halves_arr, fig3)
-            if np.count_nonzero(pixels_diff) < 20:
-                return True
+            is_left_merge = check_left_merge(fig1, fig2, fig3)
+            is_right_merge = check_right_merge(fig1, fig2, fig3)
+            if is_left_merge < is_right_merge:
+                return True, 'merge from left'
+            elif is_left_merge > is_right_merge:
+                return True, 'merge from right'
+            else:
+                return False, ''
+
+        def check_left_merge(fig1, fig2, fig3):
+            merged_from_left_array = figures_merge(fig1, fig2)
+            pixels_diff_from_left = calc_np_diff(merged_from_left_array, fig3)
+            diff_fig3 = np.count_nonzero(pixels_diff_from_left)
+            return diff_fig3
+
+        def check_right_merge(fig1, fig2, fig3):
+            merged_from_right_array = figures_merge(fig3, fig2)
+            pixels_diff_from_right = calc_np_diff(merged_from_right_array, fig1)
+            diff_fig1 = np.count_nonzero(pixels_diff_from_right)
+            return diff_fig1
+
+        def figures_merge(first, second):
+            merge = np.zeros((32, 32))
+            for j, y_val in enumerate(first):
+                for i, x_val in enumerate(y_val):
+                    merge[j][i] = first[j][i]
+                    if x_val > second[j][i]:
+                        merge[j][i] = second[j][i]
+            return merge
+
+        def figures_substraction(fig1, fig2):
+            substraction = fig1
+            for j, y_val in enumerate(fig1):
+                for i, x_val in enumerate(y_val):
+                    if x_val == fig2[j][i] == 0:
+                        substraction[j][i] = 255
+            return substraction
 
         def has_additions(all_figs):
             A2B = B2C = D2E = E2F = G2H = h0 = h1 = h2 = False
@@ -138,7 +164,7 @@ class Agent:
             F_blacks = calc_black_pixels(all_figs[5])
             G_blacks = calc_black_pixels(all_figs[6])
             H_blacks = calc_black_pixels(all_figs[7])
-            blacks_counts = np.zeros((3,3))
+            blacks_counts = np.zeros((3, 3))
             blacks_counts[0] = [A_blacks, B_blacks, C_blacks]
             blacks_counts[1] = [D_blacks, E_blacks, F_blacks]
             blacks_counts[2] = [G_blacks, H_blacks, 0]
@@ -237,7 +263,7 @@ class Agent:
                     pass
                     # answer = select_rotated_answer(figA, figB)
         elif problem.problemType == '3x3':
-            # if problem.name == 'Basic Problem E-01':
+            # if problem.name == 'Basic Problem E-05':
                 figA = Image.open(problem.figures["A"].visualFilename).convert('L').filter(ImageFilter.SHARPEN)
                 figB = Image.open(problem.figures["B"].visualFilename).convert('L').filter(ImageFilter.SHARPEN)
                 figC = Image.open(problem.figures["C"].visualFilename).convert('L').filter(ImageFilter.SHARPEN)
@@ -285,10 +311,14 @@ class Agent:
                     if transformation == 'constant additions':
                         pixel_inc = calc_pix_increments(black_pixels)
                         answer = select_answer_with_addition(th_array[7], pixel_inc, solutions_array)
-                    elif transformation == 'halves additions':
+                    elif transformation == 'merge from left':
                         merge = figures_merge(th_array[6], th_array[7])
                         answer = select_answer_similar_to(merge, solutions_array)
-                        print('halves additions', problem.name)
+                        print('merge from left', problem.name)
+                    elif transformation == 'merge from right':
+                        substraction = figures_substraction(th_array[6], th_array[7])
+                        answer = select_answer_similar_to(substraction, solutions_array)
+                        print('merge from right', problem.name)
                     elif transformation == 'no horizontal differences':
                         answer = select_answer_similar_to(th_array[7], solutions_array)
                         print(transformation)
