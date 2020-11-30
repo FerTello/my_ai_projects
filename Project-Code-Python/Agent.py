@@ -91,14 +91,17 @@ class Agent:
             h0_adds, h1_adds, h2_adds, blacks_counts = has_additions(all_figs)
             are_halves, merge_side = check_halves_additions(all_figs)
             is_pixels_substraction, sol_pixels_count = black_pixels_substraction(all_figs)
+            is_translated = has_1step_translation(all_figs)
+            if is_translated:
+                return 'horizontal translation', blacks_counts
             if h0_adds == h1_adds == h2_adds == True:
                 return 'constant additions', blacks_counts
             elif are_halves:
                 return merge_side, blacks_counts
             elif is_pixels_substraction:
-                return 'pixels substraction', sol_pixels_count
+                return 'pixels subtraction', sol_pixels_count
             else:
-                return 'unknown transformations', blacks_counts
+                return 'no horizontal differences', blacks_counts
 
         def calc_horizontals_differences(all_figs):
             h0_diff = h1_diff = h2_diff = False
@@ -126,12 +129,19 @@ class Agent:
                 return False, merge_side
 
         def check_horizontal_halves(fig1, fig2, fig3):
-            is_left_merge = check_left_merge(fig1, fig2, fig3)
-            is_right_merge = check_right_merge(fig1, fig2, fig3)
-            if is_left_merge < is_right_merge:
-                return True, 'merge from left'
-            elif is_left_merge > is_right_merge:
-                return True, 'merge from right'
+            left_merge_diff = check_left_merge(fig1, fig2, fig3)
+            right_merge_diff = check_right_merge(fig1, fig2, fig3)
+            middle_merge_diff = check_middle_merge(fig1, fig2, fig3)
+            if left_merge_diff < right_merge_diff:
+                if left_merge_diff < middle_merge_diff:
+                    return True, 'merge from left'
+                else:
+                    return True, 'merge to middle'
+            elif right_merge_diff < left_merge_diff:
+                if right_merge_diff < middle_merge_diff:
+                    return True, 'merge from right'
+                else:
+                    return True, 'merge to middle'
             else:
                 return False, 'none'
 
@@ -147,6 +157,12 @@ class Agent:
             diff_fig1 = np.count_nonzero(pixels_diff_from_right)
             return diff_fig1
 
+        def check_middle_merge(fig1, fig2, fig3):
+            merged_from_middle_array = figures_merge(fig1, fig3)
+            pixels_diff_from_middle = calc_np_diff(merged_from_middle_array, fig2)
+            diff_fig2 = np.count_nonzero(pixels_diff_from_middle)
+            return diff_fig2
+
         def figures_merge(first, second):
             merge = np.zeros((32, 32))
             for j, y_val in enumerate(first):
@@ -157,12 +173,12 @@ class Agent:
             return merge
 
         def figures_truncation(fig1, fig2):
-            substraction = fig1
+            subtraction = fig1
             for j, y_val in enumerate(fig1):
                 for i, x_val in enumerate(y_val):
                     if x_val == fig2[j][i] == 0:
-                        substraction[j][i] = 255
-            return substraction
+                        subtraction[j][i] = 255
+            return subtraction
 
         def black_pixels_substraction(all_figs):
             a_blacks, b_blacks, c_blacks, d_blacks, e_blacks, f_blacks, g_blacks, h_blacks = calc_all_figs_black_pixels(all_figs)
@@ -173,6 +189,27 @@ class Agent:
                     return False, None
             else:
                 return False, None
+
+        def has_1step_translation(all_figs):
+            diff_0to4 = np.count_nonzero(calc_np_diff(all_figs[0], all_figs[4]))
+            diff_1to5 = np.count_nonzero(calc_np_diff(all_figs[1], all_figs[5]))
+            diff_2to3 = np.count_nonzero(calc_np_diff(all_figs[2], all_figs[3]))
+            diff_5to6 = np.count_nonzero(calc_np_diff(all_figs[5], all_figs[6]))
+            diff_3to7 = np.count_nonzero(calc_np_diff(all_figs[3], all_figs[7]))
+            if diff_0to4 < 30:
+                if diff_1to5 < 30:
+                    if diff_5to6 < 30:
+                        if diff_2to3 < 30:
+                            if diff_3to7 < 30:
+                                return True
+                        else:
+                            return False
+                    else:
+                        return False
+                return False
+            else:
+                return False
+            return True
 
         def calc_all_figs_black_pixels(all_figs):
             A_blacks = calc_black_pixels(all_figs[0])
@@ -187,14 +224,7 @@ class Agent:
 
         def has_additions(all_figs):
             A2B = B2C = D2E = E2F = G2H = h0 = h1 = h2 = False
-            A_blacks = calc_black_pixels(all_figs[0])
-            B_blacks = calc_black_pixels(all_figs[1])
-            C_blacks = calc_black_pixels(all_figs[2])
-            D_blacks = calc_black_pixels(all_figs[3])
-            E_blacks = calc_black_pixels(all_figs[4])
-            F_blacks = calc_black_pixels(all_figs[5])
-            G_blacks = calc_black_pixels(all_figs[6])
-            H_blacks = calc_black_pixels(all_figs[7])
+            A_blacks, B_blacks, C_blacks, D_blacks, E_blacks, F_blacks, G_blacks, H_blacks = calc_all_figs_black_pixels(all_figs)
             blacks_counts = np.zeros((3, 3))
             blacks_counts[0] = [A_blacks, B_blacks, C_blacks]
             blacks_counts[1] = [D_blacks, E_blacks, F_blacks]
@@ -294,7 +324,7 @@ class Agent:
                     pass
                     # answer = select_rotated_answer(figA, figB)
         elif problem.problemType == '3x3':
-            # if problem.name == 'Basic Problem E-04':
+            # if problem.name == 'Basic Problem D-02':
                 figA = Image.open(problem.figures["A"].visualFilename).convert('L').filter(ImageFilter.SHARPEN)
                 figB = Image.open(problem.figures["B"].visualFilename).convert('L').filter(ImageFilter.SHARPEN)
                 figC = Image.open(problem.figures["C"].visualFilename).convert('L').filter(ImageFilter.SHARPEN)
@@ -350,8 +380,14 @@ class Agent:
                         truncation = figures_truncation(th_array[6], th_array[7])
                         answer = select_answer_similar_to(truncation, solutions_array)
                         print('merge from right', problem.name)
-                    elif transformation == 'pixels substraction':
+                    elif transformation == 'merge to middle':
+                        truncation = figures_truncation(th_array[7], th_array[6])
+                        answer = select_answer_similar_to(truncation, solutions_array)
+                    elif transformation == 'pixels subtraction':
                         answer = select_answer_with_pixels_count(black_pixels, solutions_array)
+                        print(transformation, problem.name)
+                    elif transformation == 'horizontal translation':
+                        answer = select_answer_similar_to(th_array[4], solutions_array)
                         print(transformation, problem.name)
                     elif transformation == 'no horizontal differences':
                         answer = select_answer_similar_to(th_array[7], solutions_array)
