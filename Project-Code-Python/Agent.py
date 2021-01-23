@@ -88,20 +88,26 @@ class Agent:
                     return i + 1
 
         def find_transformation(all_figs):
+            h0_diff, h1_diff, h2_diff = calc_horizontals_differences(all_figs)
             h0_adds, h1_adds, h2_adds, blacks_counts = has_additions(all_figs)
             are_halves, merge_side = check_halves_additions(all_figs)
             is_pixels_substraction, sol_pixels_count = black_pixels_substraction(all_figs)
             is_translated = has_1step_translation(all_figs)
+            has_horizontal_unions, h0_union, h1_union = check_horizontal_unions(all_figs)
             if is_translated:
                 return 'horizontal translation', blacks_counts
-            if h0_adds == h1_adds == h2_adds == True:
-                return 'constant additions', blacks_counts
+            elif has_horizontal_unions:
+                return 'horizontal unions', blacks_counts
             elif are_halves:
                 return merge_side, blacks_counts
+            if h0_adds == h1_adds == h2_adds == True:
+                return 'constant additions', blacks_counts
             elif is_pixels_substraction:
                 return 'pixels subtraction', sol_pixels_count
-            else:
+            elif h0_diff == h1_diff == h2_diff == False:
                 return 'no horizontal differences', blacks_counts
+            else:
+                return 'guess answer', blacks_counts
 
         def calc_horizontals_differences(all_figs):
             h0_diff = h1_diff = h2_diff = False
@@ -110,15 +116,24 @@ class Agent:
             D2E_diff = calc_np_diff(all_figs[3], all_figs[4])
             E2F_diff = calc_np_diff(all_figs[4], all_figs[5])
             G2H_diff = calc_np_diff(all_figs[6], all_figs[7])
-            if np.count_nonzero(A2B_diff) > 52:
-                if np.count_nonzero(B2C_diff) > 52:
+            if np.count_nonzero(A2B_diff) > 15:
+                if np.count_nonzero(B2C_diff) > 15:
                     h0_diff = True
-            if np.count_nonzero(D2E_diff) > 52:
-                if np.count_nonzero(E2F_diff) > 52:
+            if np.count_nonzero(D2E_diff) > 15:
+                if np.count_nonzero(E2F_diff) > 15:
                     h1_diff = True
-            if np.count_nonzero(G2H_diff) > 52:
+            if np.count_nonzero(G2H_diff) > 15:
                 h2_diff = True
             return h0_diff, h1_diff, h2_diff
+
+        def calc_h_diffs(all_figs):
+            h0_diff = h1_diff = h2_diff = False
+            A2B_diff = calc_img_difference(all_figs[0], all_figs[1])
+            B2C_diff = calc_img_difference(all_figs[1], all_figs[2])
+            D2E_diff = calc_img_difference(all_figs[3], all_figs[4])
+            E2F_diff = calc_img_difference(all_figs[4], all_figs[5])
+            G2H_diff = calc_img_difference(all_figs[6], all_figs[7])
+            pass
 
         def check_halves_additions(all_figs):
             h0_are_halves, merge_side = check_horizontal_halves(all_figs[0], all_figs[1], all_figs[2])
@@ -189,6 +204,33 @@ class Agent:
                     return False, None
             else:
                 return False, None
+
+        def horizontal_unions(fig1, fig2, fig3):
+            merge_12 = figures_merge(fig1, fig2)
+            merge_123 = figures_merge(merge_12, fig3)
+            return merge_123
+
+        def check_horizontal_unions(all_figs):
+            h0_union = horizontal_unions(all_figs[0], all_figs[1], all_figs[2])
+            h1_union = horizontal_unions(all_figs[3], all_figs[4], all_figs[5])
+            diff_h01_unions = np.count_nonzero(calc_np_diff(h0_union, h1_union))
+            if diff_h01_unions < 120:
+                return True, h0_union, h1_union
+            else:
+                return False, '', ''
+
+        def select_answer_missing_from_horizontal_union(all_figs, solution_array):
+            unions_array = []
+            unions_diff = []
+            h0_union = horizontal_unions(all_figs[0], all_figs[1], all_figs[2])
+            h1_union = horizontal_unions(all_figs[3], all_figs[4], all_figs[5])
+            for i, sol in enumerate(solution_array):
+                h2_union = horizontal_unions(all_figs[6], all_figs[7], solution_array[i])
+                unions_array.append(h2_union)
+            for sol_union in unions_array:
+                diff_unions = np.count_nonzero(calc_np_diff(h0_union, sol_union))
+                unions_diff.append(diff_unions)
+            return unions_diff.index(min(unions_diff)) + 1
 
         def has_1step_translation(all_figs):
             diff_0to4 = np.count_nonzero(calc_np_diff(all_figs[0], all_figs[4]))
@@ -324,7 +366,7 @@ class Agent:
                     pass
                     # answer = select_rotated_answer(figA, figB)
         elif problem.problemType == '3x3':
-            # if problem.name == 'Basic Problem D-02':
+            # if problem.name == 'Basic Problem E-03':
                 figA = Image.open(problem.figures["A"].visualFilename).convert('L').filter(ImageFilter.SHARPEN)
                 figB = Image.open(problem.figures["B"].visualFilename).convert('L').filter(ImageFilter.SHARPEN)
                 figC = Image.open(problem.figures["C"].visualFilename).convert('L').filter(ImageFilter.SHARPEN)
@@ -369,7 +411,10 @@ class Agent:
                             answer = select_answer_within_smallest_diff(th_array[5], th_array[7], solutions_array)
                 else:
                     transformation, black_pixels = find_transformation(th_array)
-                    if transformation == 'constant additions':
+                    if transformation == 'horizontal unions':
+                        answer = select_answer_missing_from_horizontal_union(th_array, solutions_array)
+                        print(transformation, problem.name)
+                    elif transformation == 'constant additions':
                         pixel_inc = calc_pix_increments(black_pixels)
                         answer = select_answer_with_addition(th_array[7], pixel_inc, solutions_array)
                     elif transformation == 'merge from left':
@@ -392,6 +437,8 @@ class Agent:
                     elif transformation == 'no horizontal differences':
                         answer = select_answer_similar_to(th_array[7], solutions_array)
                         print(transformation)
+                    elif transformation == 'guess answer':
+                        answer = select_answer_missing_from_horizontal_union(th_array, solutions_array)
 
         print(answer)
         return int(answer)
